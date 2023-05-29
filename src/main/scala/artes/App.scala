@@ -49,7 +49,7 @@ object Main extends App {
     case "--bind" :: bind :: tail =>
       this.bind = bind
       scan(tail)
-    case "join" :: ip :: port :: tail =>
+    case "--join" :: ip :: port :: tail =>
       this.join = (ip, port.toInt).some
       scan(tail)
     case unknown :: tail =>
@@ -58,6 +58,7 @@ object Main extends App {
         println("--port <port> - port for cluster bind (9999)")
         println("--bind <ip> - cluster network interface (127.0.0.1)")
         println("--join <ip> <port> - connect to cluster")
+        System.exit(0)
       } else throw new Exception(s"unknown arg: $unknown")
     case List() =>
   }
@@ -83,6 +84,7 @@ object Main extends App {
   private def run() = {
     val config = s"""
       akka {
+        loglevel = "WARNING"
         actor {
           provider = "cluster"
           serialization-bindings {
@@ -103,7 +105,7 @@ object Main extends App {
       .map(_.config)
       .map(ConfigFactory.parseString)
       .foldLeft(ConfigFactory.parseString(config)) { case (acc, j) =>
-        j.withFallback(j)
+        acc.withFallback(j)
       }
 
     ActorSystem[Nothing](Behaviors.setup[Nothing] { ctx =>
@@ -111,8 +113,9 @@ object Main extends App {
       val cluster = Cluster(ctx.system)
 
       case class Kill() extends SystemCommand
-      var remains = (0 to spawners.size - 1).toSet
+      var remains = Set[Int]()
 
+      println(s"actors: ${spawners.size}")
       if (spawners.size > 0) {
         val spawn = ctx.spawnAnonymous(Behaviors.setup[SystemCommand] { ctx =>
           Behaviors.withTimers { timers =>
@@ -148,15 +151,18 @@ object Main extends App {
           spawn ! SystemCommand.JoinCluster(j._1, j._2)
         }
 
-        spawners.foreach { spawner =>
+        spawners.zipWithIndex.foreach { spawner =>
           Try {
-            spawner.spawn(ctx, spawn)
+            spawner._1.spawn(ctx, spawn)
+            remains += spawner._2
           } match {
             case Failure(f) => ctx.log.error(f.getMessage())
             case _ =>
           }
         }
-        Behaviors.empty
+        println(s"active actors: ${remains.size}")
+        if (remains.isEmpty) Behaviors.stopped
+        else Behaviors.empty
       } else Behaviors.stopped
     }, "lambda", configs)
   }

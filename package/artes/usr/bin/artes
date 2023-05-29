@@ -1,0 +1,12 @@
+#!/bin/sh
+
+CP=""
+for i in /usr/share/java/artes/*.jar
+do
+  CP=$CP:$i
+done
+for i in $DCP/*
+do
+  CP=$CP:$i
+done
+java $JVM_ARGS -cp $CP artes.Main $ARTES_ARGS

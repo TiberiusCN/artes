@@ -4,3 +4,9 @@
 .project
 .settings
 target
+package/artes.deb
+package/artes.tar.xz
+package/*tar.zst
+package/pkg
+package/src
+package/artes/usr/share/java

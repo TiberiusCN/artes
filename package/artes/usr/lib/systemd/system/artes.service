@@ -1,0 +1,15 @@
+[Unit]
+Description=artes
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=sh /usr/bin/artes
+Restart=always
+RestartSec=30
+EnvironmentFile=/etc/artes.conf
+User=artes
+Group=artes
+
+[Install]
+WantedBy=multi-user.target

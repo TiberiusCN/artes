@@ -1,0 +1,16 @@
+pkgname=artes
+pkgver=1.0
+pkgrel=1
+pkgdesc="akka dynamic actors"
+arch=('any')
+license=('MIT')
+groups=()
+depends=('java-runtime' 'systemd')
+makedepends=('tar')
+provides=('artes')
+source=('artes.tar.xz')
+sha256sums=('b246785f30d9bb8bf78e2b860c6292199a9a785dc389bdd3b120ca4eb222d734')
+
+package() {
+  tar -xf artes.tar.xz -C "$pkgdir"
+}

@@ -1,0 +1,7 @@
+Package: artes
+Version: 1.0-1
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: none <none@none.com>
+Description: artes core
