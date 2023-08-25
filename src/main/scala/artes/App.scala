@@ -17,17 +17,17 @@ trait ClusterMessage
 
 trait Spawner {
   def config: String
-  def kill(): Unit
-  def stop(j: Int): Unit
   def spawn(context: ActorContext[Nothing], system: ActorRef[SystemCommand]): Unit
 }
+
+case class ShutdownActor()
 
 trait SystemCommand
 object SystemCommand {
   case class AddDependency(name: String, jar: Array[Byte]) extends SystemCommand
   case class JoinCluster(host: String, port: Int) extends SystemCommand
   case class Shutdown(timeout: Int) extends SystemCommand
-  case class Finished(j: Int) extends SystemCommand
+  case class EnableSafeShutdown(ref: ActorRef[ShutdownActor]) extends SystemCommand
 }
 
 object Main extends App {
@@ -112,36 +112,33 @@ object Main extends App {
       implicit val ec = ctx.executionContext
       val cluster = Cluster(ctx.system)
 
-      case class Kill() extends SystemCommand
-      var remains = Set[Int]()
+      case object Kill extends SystemCommand
 
       println(s"actors: ${spawners.size}")
+      var run = 0
+      var safeShutdown = collection.mutable.Set[ActorRef[ShutdownActor]]()
       if (spawners.size > 0) {
         val spawn = ctx.spawnAnonymous(Behaviors.setup[SystemCommand] { ctx =>
           Behaviors.withTimers { timers =>
             Behaviors.receiveMessage {
               case SystemCommand.Shutdown(timeout) =>
-                spawners.zipWithIndex.foreach(j => j._1.stop(j._2))
-                timers.startSingleTimer(Kill(), timeout.seconds)
+                safeShutdown.foreach(j => j ! ShutdownActor())
+                timers.startSingleTimer(Kill, timeout.seconds)
                 Behaviors.same
               case SystemCommand.JoinCluster(host, port) =>
                 cluster.manager ! Join(akka.actor.Address("akka", "lambda", host.some, port.some))
                 Behaviors.same
-              case SystemCommand.Finished(j) =>
-                remains -= j
-                if (remains.isEmpty) Behaviors.stopped else Behaviors.same
               case SystemCommand.AddDependency(name, jar) =>
                 Using(new java.io.FileOutputStream(path.resolve(name).toFile))(_.write(jar)) match {
                   case Failure(f) => ctx.log.error(f.getMessage())
                   case _ =>
                 }
                 Behaviors.same
-              case Kill() =>
-                remains.foreach(j => spawners(j).kill())
-                scala.concurrent.Future {
-                  Thread.sleep(10)
-                  System.exit(-1)
-                }
+              case SystemCommand.EnableSafeShutdown(ref) =>
+                safeShutdown += ref
+                Behaviors.same
+              case Kill =>
+                ctx.system.terminate()
                 Behaviors.empty
             }
           }
@@ -151,17 +148,14 @@ object Main extends App {
           spawn ! SystemCommand.JoinCluster(j._1, j._2)
         }
 
-        spawners.zipWithIndex.foreach { spawner =>
-          Try {
-            spawner._1.spawn(ctx, spawn)
-            remains += spawner._2
-          } match {
+        spawners.foreach { spawner =>
+          Try(spawner.spawn(ctx, spawn)) match {
             case Failure(f) => ctx.log.error(f.getMessage())
-            case _ =>
+            case _ => run += 1
           }
         }
-        println(s"active actors: ${remains.size}")
-        if (remains.isEmpty) Behaviors.stopped
+        println(s"active actors: $run")
+        if (run == 0) Behaviors.stopped
         else Behaviors.empty
       } else Behaviors.stopped
     }, "lambda", configs)

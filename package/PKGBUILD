@@ -9,7 +9,8 @@ depends=('java-runtime' 'systemd')
 makedepends=('tar')
 provides=('artes')
 source=('artes.tar.xz')
-sha256sums=('b246785f30d9bb8bf78e2b860c6292199a9a785dc389bdd3b120ca4eb222d734')
+backup=('etc/artes.conf')
+sha256sums=('472909710ce7a47b43c5474f664bf3243a1020d9e123382481a4fbf124c632d8')
 
 package() {
   tar -xf artes.tar.xz -C "$pkgdir"
